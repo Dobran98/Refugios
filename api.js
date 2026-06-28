@@ -6,7 +6,7 @@
  * ============================================================
  */
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyBZvYU9OOccH1dZCSA2Tw1uJNMYCXQEJ_NpybW9o4gk0w9AbYed5GGX8ZasOdC8TJn/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwIjdQI3LcmW5BOFqoABWrJ4wR6-d4LiV3oiX1_GKNIDtR-8raOhAoEoCzUJbkQMx41/exec';
 
 // ─── ESTADO ────────────────────────────────────────────────
 

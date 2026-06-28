@@ -5,7 +5,7 @@
  * ============================================================
  */
 
-const CACHE_NAME = 'refugios-pwa-v1';
+const CACHE_NAME = 'refugios-pwa-v2';
 
 // Archivos críticos a cachear para funcionamiento offline
 const ASSETS_TO_CACHE = [
