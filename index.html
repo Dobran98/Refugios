@@ -584,6 +584,28 @@
                 <div class="stat-detail-item"><span class="material-icons-outlined">female</span> F: <strong id="statMayoresF">0</strong></div>
               </div>
             </div>
+            <!-- Total Familias (Configurable) -->
+            <div class="stat-card blue">
+              <div class="stat-card-icon"><span class="material-icons-outlined">holiday_village</span></div>
+              <div class="stat-card-value" id="statFamilias">0</div>
+              <div class="stat-card-label">Total Familias Atendidas</div>
+              <div style="margin-top: auto; display: flex; justify-content: center; width: 100%;">
+                <button class="btn btn-secondary btn-xs" onclick="abrirModalConfigFamilias()" style="padding: 2px 8px; font-size: 0.68rem; line-height: 1.2; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); color: var(--accent-gold);">
+                  <span class="material-icons-outlined" style="font-size: 12px;">settings</span>
+                  Establecer Línea Base
+                </button>
+              </div>
+            </div>
+            <!-- Patologías (Total & Género) -->
+            <div class="stat-card red">
+              <div class="stat-card-icon"><span class="material-icons-outlined">healing</span></div>
+              <div class="stat-card-value" id="statPatologias">0</div>
+              <div class="stat-card-label">Personas con Patologías</div>
+              <div class="stat-card-detail">
+                <div class="stat-detail-item"><span class="material-icons-outlined">male</span> M: <strong id="statPatologiasM">0</strong></div>
+                <div class="stat-detail-item"><span class="material-icons-outlined">female</span> F: <strong id="statPatologiasF">0</strong></div>
+              </div>
+            </div>
           </div>
 
           <!-- Charts -->
@@ -971,6 +993,36 @@
         <button class="btn btn-primary hidden" id="btnConfirmarImportar" onclick="ejecutarImportacion()">
           <span class="material-icons-outlined">check_circle</span>
           Importar Registros
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: CONFIGURAR BASE FAMILIAS ═══════════════════ -->
+  <div class="modal-overlay" id="modalConfigFamilias">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h3>Configurar Línea Base de Familias</h3>
+        <button class="modal-close" onclick="cerrarModalConfigFamilias()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 16px;">
+          Define un número base inicial de familias atendidas. Los registros creados a partir de la fecha seleccionada se sumarán a esta base para calcular el gran total.
+        </p>
+        <div class="form-group">
+          <label for="cfgFamiliasBase">Cantidad Base de Familias <span class="required">*</span></label>
+          <input type="number" id="cfgFamiliasBase" class="form-control" placeholder="Ej: 500" min="0" required>
+        </div>
+        <div class="form-group">
+          <label for="cfgFamiliasBaseFecha">Contabilizar nuevos registros desde <span class="required">*</span></label>
+          <input type="date" id="cfgFamiliasBaseFecha" class="form-control" required>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="cerrarModalConfigFamilias()">Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarConfigFamilias" onclick="guardarConfiguracionFamiliasFront()">
+          <span class="material-icons-outlined">save</span>
+          Guardar Configuración
         </button>
       </div>
     </div>

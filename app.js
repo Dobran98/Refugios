@@ -175,6 +175,7 @@ function mostrarApp() {
   cargarRegistros();
   if (esAdmin) {
     cargarUsuarios();
+    cargarConfiguracionFamilias();
   }
   
   // Cargar datos de diagnóstico de la hoja
@@ -737,6 +738,17 @@ function limpiarFiltrosDashboard() {
 
 function calcularEstadisticasFront(registrosFiltrados) {
   const total = registrosFiltrados.length;
+  
+  // Determinar si hay filtros activos en el dashboard
+  var fechaInicioVal = document.getElementById('dbFechaInicio') ? document.getElementById('dbFechaInicio').value : '';
+  var fechaFinVal = document.getElementById('dbFechaFin') ? document.getElementById('dbFechaFin').value : '';
+  var estaFiltrando = fechaInicioVal || fechaFinVal;
+
+  // Si no se está filtrando, partimos de la cantidad base manual
+  var baseFamilias = (!estaFiltrando && configFamiliasGlobal && configFamiliasGlobal.base) ? parseInt(configFamiliasGlobal.base) : 0;
+  var fechaBaseStr = (!estaFiltrando && configFamiliasGlobal && configFamiliasGlobal.fecha) ? configFamiliasGlobal.fecha : '';
+  var dateBase = fechaBaseStr ? new Date(fechaBaseStr + 'T00:00:00') : null;
+
   const stats = {
     totalPersonas: total,
     ninos: { masculino: 0, femenino: 0, total: 0 },
@@ -745,8 +757,9 @@ function calcularEstadisticasFront(registrosFiltrados) {
     recienNacidos: 0,
     adultos: { masculino: 0, femenino: 0, total: 0 },
     adultosMayores: { masculino: 0, femenino: 0, total: 0 },
-    totalFamilias: 0,
-    totalIntegrantes: 0
+    totalFamilias: baseFamilias,
+    totalIntegrantes: 0,
+    patologias: { total: 0, masculino: 0, femenino: 0 }
   };
 
   registrosFiltrados.forEach(function(r) {
@@ -765,6 +778,9 @@ function calcularEstadisticasFront(registrosFiltrados) {
     var integrantesKey = Object.keys(r).find(function(k) {
       return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "total integrantes";
     }) || 'TOTAL INTEGRANTES';
+    var patologiaKey = Object.keys(r).find(function(k) {
+      return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "patologias";
+    }) || 'PATOLOGÍAS';
 
     var edadRaw = String(r[edadKey] || '').trim().toUpperCase();
     var edad = (edadRaw.indexOf('MES') !== -1 || edadRaw.endsWith('M')) ? 0 : (parseInt(edadRaw) || 0);
@@ -799,8 +815,27 @@ function calcularEstadisticasFront(registrosFiltrados) {
       stats.embarazadas++;
     }
 
-    stats.totalFamilias += parseInt(r[familiasKey]) || 0;
+    // Contabilizar familias
+    var familiasEnRegistro = parseInt(r[familiasKey]) || 0;
+    if (dateBase) {
+      var rFecha = parseSheetDate(r['FECHA_REGISTRO']);
+      if (rFecha && rFecha >= dateBase) {
+        stats.totalFamilias += familiasEnRegistro;
+      }
+    } else {
+      stats.totalFamilias += familiasEnRegistro;
+    }
+
     stats.totalIntegrantes += parseInt(r[integrantesKey]) || 0;
+
+    // Contabilizar patologías
+    var patVal = String(r[patologiaKey] || '').trim();
+    var tienePatologia = patVal && !/^(ninguna|ninguno|no|no aplica|n\/a|sin patologia|s\/p|-)$/i.test(patVal);
+    if (tienePatologia) {
+      stats.patologias.total++;
+      if (esM) stats.patologias.masculino++;
+      if (esF) stats.patologias.femenino++;
+    }
   });
 
   return stats;
@@ -825,8 +860,9 @@ function descargarReporteDashboard() {
     ['Adultos Mayores (56+ años)', stats.adultosMayores.total, stats.adultosMayores.masculino, stats.adultosMayores.femenino],
     ['Mujeres Embarazadas', stats.embarazadas, '', stats.embarazadas],
     ['Recién Nacidos', stats.recienNacidos, '', ''],
-    ['Total Familias', stats.totalFamilias, '', ''],
-    ['Total Integrantes', stats.totalIntegrantes, '', '']
+    ['Total Familias Atendidas (con base)', stats.totalFamilias, '', ''],
+    ['Total Integrantes de Familias', stats.totalIntegrantes, '', ''],
+    ['Personas con Patologías', stats.patologias.total, stats.patologias.masculino, stats.patologias.femenino]
   ];
 
   // Crear libro de trabajo
@@ -897,6 +933,16 @@ function actualizarTarjetas(stats) {
   animarNumero('statMayores', stats.adultosMayores.total);
   document.getElementById('statMayoresM').textContent = stats.adultosMayores.masculino;
   document.getElementById('statMayoresF').textContent = stats.adultosMayores.femenino;
+
+  // Nuevas tarjetas: Familias y Patologías
+  animarNumero('statFamilias', stats.totalFamilias);
+  animarNumero('statPatologias', stats.patologias.total);
+  if (document.getElementById('statPatologiasM')) {
+    document.getElementById('statPatologiasM').textContent = stats.patologias.masculino;
+  }
+  if (document.getElementById('statPatologiasF')) {
+    document.getElementById('statPatologiasF').textContent = stats.patologias.femenino;
+  }
 }
 
 function animarNumero(elementId, targetValue) {
@@ -1880,6 +1926,13 @@ function actualizarReporteTexto() {
     mayores: { M: 0, F: 0, total: 0 }
   };
 
+  var totalEmbarazadas = 0;
+  var embPorEdad = { lactantes: 0, ninas: 0, adol: 0, adultos: 0, mayores: 0 };
+
+  var totalConPatologias = 0;
+  var patPorEdad = { lactantes: 0, ninas: 0, adol: 0, adultos: 0, mayores: 0 };
+  var listaPatologiasSet = [];
+
   filtrados.forEach(function(r) {
     var edadKey = Object.keys(r).find(function(k) {
       return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "edad";
@@ -1887,13 +1940,21 @@ function actualizarReporteTexto() {
     var sexoKey = Object.keys(r).find(function(k) {
       return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "sexo";
     }) || 'SEXO';
+    var embarazoKey = Object.keys(r).find(function(k) {
+      return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "embarazo";
+    }) || 'EMBARAZO';
+    var patologiaKey = Object.keys(r).find(function(k) {
+      return k.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === "patologias";
+    }) || 'PATOLOGÍAS';
 
     var edadRaw = String(r[edadKey] || '').trim().toUpperCase();
     var edad = (edadRaw.indexOf('MES') !== -1 || edadRaw.endsWith('M')) ? 0 : (parseInt(edadRaw) || 0);
     var sexoRaw = String(r[sexoKey] || '').trim().toLowerCase();
     var esM = (sexoRaw.startsWith('m') || sexoRaw.includes('masc') || sexoRaw === 'h' || sexoRaw.includes('hombre'));
     var esF = (sexoRaw.startsWith('f') || sexoRaw.includes('fem') || sexoRaw === 'mujer');
+    var embarazo = String(r[embarazoKey] || '').trim().toUpperCase() === 'SÍ' || r[embarazoKey] === true;
 
+    // Etarios
     if (edad >= 0 && edad <= 3) {
       stats.lactantes.total++;
       if (esM) stats.lactantes.M++;
@@ -1914,6 +1975,50 @@ function actualizarReporteTexto() {
       stats.mayores.total++;
       if (esM) stats.mayores.M++;
       if (esF) stats.mayores.F++;
+    }
+
+    // Embarazadas
+    if (embarazo && esF) {
+      totalEmbarazadas++;
+      if (edad >= 0 && edad <= 3) {
+        embPorEdad.lactantes++;
+      } else if (edad >= 4 && edad <= 12) {
+        embPorEdad.ninas++;
+      } else if (edad >= 13 && edad <= 17) {
+        embPorEdad.adol++;
+      } else if (edad >= 18 && edad <= 64) {
+        embPorEdad.adultos++;
+      } else if (edad >= 65) {
+        embPorEdad.mayores++;
+      }
+    }
+
+    // Patologías
+    var patVal = String(r[patologiaKey] || '').trim();
+    var tienePatologia = patVal && !/^(ninguna|ninguno|no|no aplica|n\/a|sin patologia|s\/p|-)$/i.test(patVal);
+    if (tienePatologia) {
+      totalConPatologias++;
+      if (edad >= 0 && edad <= 3) {
+        patPorEdad.lactantes++;
+      } else if (edad >= 4 && edad <= 12) {
+        patPorEdad.ninas++;
+      } else if (edad >= 13 && edad <= 17) {
+        patPorEdad.adol++;
+      } else if (edad >= 18 && edad <= 64) {
+        patPorEdad.adultos++;
+      } else if (edad >= 65) {
+        patPorEdad.mayores++;
+      }
+
+      var parts = patVal.split(/[,;\-\/]/);
+      parts.forEach(function(part) {
+        var cleanPart = part.trim().toUpperCase();
+        if (cleanPart && !/^(NINGUNA|NINGUNO|NO|NO APLICA|N\/A|SIN PATOLOGIA|S\/P|-)$/i.test(cleanPart)) {
+          if (listaPatologiasSet.indexOf(cleanPart) === -1) {
+            listaPatologiasSet.push(cleanPart);
+          }
+        }
+      });
     }
   });
 
@@ -1945,7 +2050,33 @@ function actualizarReporteTexto() {
   reporte += 'Tercera edad (65-en adelante)\n\n';
   reporte += 'Cantidad total: ' + stats.mayores.total + '\n\n';
   reporte += '📝Masculinos: ' + stats.mayores.M + '\n';
-  reporte += '📝Femeninos: ' + stats.mayores.F;
+  reporte += '📝Femeninos: ' + stats.mayores.F + '\n';
+  reporte += '------------------------\n';
+  reporte += '🤰 Mujeres Embarazadas\n\n';
+  reporte += 'Cantidad total: ' + totalEmbarazadas + '\n\n';
+  reporte += '📝Niñas lactantes (0-3): ' + embPorEdad.lactantes + '\n';
+  reporte += '📝Niñas (4-12): ' + embPorEdad.ninas + '\n';
+  reporte += '📝Adolescentes (13-17): ' + embPorEdad.adol + '\n';
+  reporte += '📝Adultas (18-64): ' + embPorEdad.adultos + '\n';
+  reporte += '📝Tercera edad (65+): ' + embPorEdad.mayores + '\n';
+  reporte += '------------------------\n';
+  reporte += '🩺 Personas con Patologías\n\n';
+  reporte += 'Cantidad total: ' + totalConPatologias + '\n\n';
+  reporte += '📝Niños lactantes (0-3): ' + patPorEdad.lactantes + '\n';
+  reporte += '📝Niños (4-12): ' + patPorEdad.ninas + '\n';
+  reporte += '📝Adolescentes (13-17): ' + patPorEdad.adol + '\n';
+  reporte += '📝Adultos (18-64): ' + patPorEdad.adultos + '\n';
+  reporte += '📝Tercera edad (65+): ' + patPorEdad.mayores + '\n';
+  reporte += '------------------------\n';
+  reporte += '📋 Catálogo de Patologías Registradas:\n';
+  if (listaPatologiasSet.length > 0) {
+    listaPatologiasSet.sort();
+    listaPatologiasSet.forEach(function(pat, idx) {
+      reporte += (idx + 1) + '. ' + pat + '\n';
+    });
+  } else {
+    reporte += 'Ninguna patología registrada.\n';
+  }
 
   document.getElementById('txtReporteCuerpo').value = reporte;
 }
@@ -2906,4 +3037,90 @@ function analizarDuplicados() {
 
   html += '</div>';
   container.innerHTML = html;
+}
+
+// ─── CONFIGURACIÓN DE FAMILIAS BASE (LÍNEA BASE) ────────────
+let configFamiliasGlobal = { base: 0, fecha: "" };
+
+function cargarConfiguracionFamilias() {
+  // Cargar de localStorage primero (offline)
+  var local = localStorage.getItem('refugio_config_familias');
+  if (local) {
+    try {
+      configFamiliasGlobal = JSON.parse(local);
+    } catch(e) {}
+  }
+  
+  if (navigator.onLine) {
+    gasRequest('obtenerConfigFamilias', {}).then(function(res) {
+      if (res && res.familiasBase !== undefined) {
+        configFamiliasGlobal = {
+          base: parseInt(res.familiasBase) || 0,
+          fecha: res.familiasBaseFecha || ""
+        };
+        localStorage.setItem('refugio_config_familias', JSON.stringify(configFamiliasGlobal));
+        
+        var seccionDb = document.getElementById('seccionDashboard');
+        if (seccionDb && seccionDb.classList.contains('active')) {
+          filtrarDashboard();
+        }
+      }
+    }).catch(function(err) {
+      console.warn("Error offline al obtener config familias:", err);
+    });
+  }
+}
+
+function abrirModalConfigFamilias() {
+  document.getElementById('cfgFamiliasBase').value = configFamiliasGlobal.base || 0;
+  document.getElementById('cfgFamiliasBaseFecha').value = configFamiliasGlobal.fecha || "";
+  document.getElementById('modalConfigFamilias').classList.add('show');
+}
+
+function cerrarModalConfigFamilias() {
+  document.getElementById('modalConfigFamilias').classList.remove('show');
+}
+
+function guardarConfiguracionFamiliasFront() {
+  var base = parseInt(document.getElementById('cfgFamiliasBase').value) || 0;
+  var fecha = document.getElementById('cfgFamiliasBaseFecha').value;
+
+  if (!fecha) {
+    showToast('La fecha de inicio es obligatoria', 'error');
+    return;
+  }
+
+  var btn = document.getElementById('btnGuardarConfigFamilias');
+  var oldText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-icons-outlined" style="animation:spin 0.8s linear infinite;">sync</span> Guardando...';
+
+  configFamiliasGlobal = { base: base, fecha: fecha };
+  localStorage.setItem('refugio_config_familias', JSON.stringify(configFamiliasGlobal));
+
+  if (navigator.onLine) {
+    gasRequest('guardarConfigFamilias', { base: base, fecha: fecha }).then(function(res) {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+      if (res && res.exito) {
+        showToast(res.mensaje, 'success');
+        cerrarModalConfigFamilias();
+        filtrarDashboard();
+      } else {
+        showToast(res ? res.mensaje : 'Error al guardar', 'error');
+      }
+    }).catch(function(err) {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+      showToast('Guardado localmente (sin conexión con el servidor)', 'warning');
+      cerrarModalConfigFamilias();
+      filtrarDashboard();
+    });
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = oldText;
+    showToast('Guardado localmente (modo offline)', 'warning');
+    cerrarModalConfigFamilias();
+    filtrarDashboard();
+  }
 }
